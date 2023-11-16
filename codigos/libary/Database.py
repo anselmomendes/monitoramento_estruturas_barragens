@@ -66,7 +66,6 @@ class Database:
             try:
                 self.create_connect()
                 gdf.to_postgis(self.table, schema=self.schema, con=self.conn, if_exists='append', index=False)
-                self.truncate_table()
             except Exception as e:
                 print(f'Falha ao realizar consulta no banco de dados: {e}')
                 return None

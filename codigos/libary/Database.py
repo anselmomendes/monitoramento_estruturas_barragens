@@ -2,6 +2,7 @@
 
 from interface.DatabaseInterface import DatabaseInterface
 import pandas as pd
+import geopandas as gpd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 import os
@@ -10,15 +11,15 @@ import psycopg2
 
 class Database:
 
-    def __init__(self, schema:str, table:str, ambiente:int):
+    def __init__(self, schema:str, table:str, ambiente:int, path:str):
         self.schema = schema
         self.table = table
-        self.dotenv_path = False
+        self.path = path
         self.ambiente = ambiente
     
     def create_connect(self):
         try:
-            self.dotenv_path = load_dotenv(dotenv_path=r'./.env', override=True)
+            self.path = load_dotenv(dotenv_path=self.path, override=True)
             try:
                 AMBIENTE = {0:"PRODUCAO", 1:"HOMOLOGACAO"}
                 engine = create_engine(os.environ.get(f"SQLALCHEMY_{AMBIENTE[self.ambiente]}"))
@@ -26,10 +27,7 @@ class Database:
             except Exception as e:
                     print(f'Falha ao estabeler conexão com banco de dados : {e}')
         except Exception as e:
-            pass
-        finally:
-            if self.dotenv_path == False:
-                print(f"Falha ao importar as variaveis de ambiente.")
+            print(f"Falha ao importar as variaveis de ambiente.")
 
     def close_connect(self):
         try:
@@ -53,20 +51,27 @@ class Database:
         finally:
             self.close_connect()
 
-    def to_table(self, df, schema=None, table=None):
-        try:
-            self.create_connect()
-            if query is None:
+    def to_table(self, df, schema, table, geom=False):
+        if geom == False:
+            try:
+                self.create_connect()
+                df.to_sql(self.table, schema=self.schema, con=self.conn, if_exists='append')
+            except Exception as e:
+                print(f'Falha ao realizar consulta no banco de dados: {e}')
+                return None
+            finally:
+                self.close_connect()
+        elif geom == True:
+            gdf = gpd.GeoDataFrame(df)
+            try:
+                self.create_connect()
+                gdf.to_postgis(self.table, schema=self.schema, con=self.conn, if_exists='append')
                 self.truncate_table()
-                df.to_sql(self.table, schema=self.schema, conn= self.conn, if_exists='append')
-            else:
-                self.truncate_table(table=table, schema=schema)
-                df.to_sql(table=table, schema=schema, conn= self.conn, if_exists='append')
-        except Exception as e:
-            print(f'Falha ao realizar consulta no banco de dados: {e}')
-            return None
-        finally:
-            self.close_connect()
+            except Exception as e:
+                print(f'Falha ao realizar consulta no banco de dados: {e}')
+                return None
+            finally:
+                self.close_connect()
 
     def refresh_table(self, table=None, schema=None):
         AMBIENTE = {0:"PRODUCAO", 1:"HOMOLOGACAO"}
@@ -90,7 +95,6 @@ class Database:
                     conn.commit()
                 except (Exception, psycopg2.DatabaseError) as error:
                     print(error)
-                    print('erro')
             else:
                 try:
                     conn =  psycopg2.connect(database=DATABASE_HOMOLOGACAO, \
@@ -110,7 +114,7 @@ class Database:
         finally:
             self.close_connect()
 
-    def truncate_table(self, table=None, schema=None):
+    def truncate_table(self, query=None):
         AMBIENTE = {0:"PRODUCAO", 1:"HOMOLOGACAO"}
         DATABASE_HOMOLOGACAO = os.environ.get(f"DATABASE_{AMBIENTE[self.ambiente]}")
         USER_HOMOLOGACAO = os.environ.get(f"USER_{AMBIENTE[self.ambiente]}")
@@ -128,11 +132,12 @@ class Database:
                                             port=PORT_HOMOLOGACAO)
                     conn.autocommit = True
                     cursor = conn.cursor()
-                    print(cursor.execute(f"truncate table {self.schema}.{self.table}"))
+                    cursor.execute(f"truncate table {self.schema}.{self.table} cascade")
                     conn.commit()
+                    return True
                 except (Exception, psycopg2.DatabaseError) as error:
                     print(error)
-                    print('erro')
+                    return False
             else:
                 try:
                     conn =  psycopg2.connect(database=DATABASE_HOMOLOGACAO, \
@@ -142,13 +147,14 @@ class Database:
                                             port=PORT_HOMOLOGACAO)
                     conn.autocommit = True
                     cursor = conn.cursor()
-                    cursor.execute(table=table, schema=schema) 
+                    cursor.execute(query) 
                     conn.commit()
+                    return True
                 except (Exception, psycopg2.DatabaseError) as error:
                     print(error)
+                    return False
         except Exception as e:
-            print(f'Falha ao realizar consulta no banco de dados: {e}')
-            return None
+            return print(f'Falha ao realizar truncate no banco de dados: {e}')
         finally:
             self.close_connect()
 

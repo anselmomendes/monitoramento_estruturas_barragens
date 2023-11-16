@@ -4,7 +4,7 @@ from pandas import DataFrame
 
 class DatabaseInterface(ABC):
     @abstractclassmethod
-    def __init__(self, schema:str, table:str, ambiente:int):
+    def __init__(self, schema:str, table:str, ambiente:int, path:str):
         pass
 
     @abstractclassmethod
@@ -16,13 +16,13 @@ class DatabaseInterface(ABC):
         pass
 
     @abstractclassmethod
-    def refresh_table(self, table:str, schema:str):
+    def refresh_table(self, query:str):
         pass
 
     @abstractclassmethod
-    def truncate_table(self, table:str, schema:str):
+    def truncate_table(self, query:str):
         pass
 
     @abstractclassmethod
-    def to_table(self, table:str, schema:str) -> bool:
+    def to_table(self, df:DataFrame, table:str, schema:str, geom:bool) -> bool:
         pass
